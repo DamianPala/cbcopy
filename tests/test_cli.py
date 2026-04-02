@@ -121,7 +121,7 @@ class TestCopyToClipboard:
             assert rc == 0
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert call_args[0][0] == ["clip.exe"]
+            assert call_args[0][0] == ["/mnt/c/Windows/system32/clip.exe"]
             assert call_args[1]["input"] == "hello".encode("utf-16-le")
 
     def test_wsl_clip_exe_utf16le(self):
@@ -144,7 +144,7 @@ class TestCopyToClipboard:
             rc = _copy_to_clipboard("hello")
             assert rc == 0
             call_args = mock_run.call_args
-            assert call_args[0][0] == ["wl-copy"]
+            assert call_args[0][0] == ["/usr/bin/wl-copy"]
             assert call_args[1]["stderr"] == subprocess.DEVNULL
 
     def test_x11_xclip(self):
@@ -156,7 +156,7 @@ class TestCopyToClipboard:
             rc = _copy_to_clipboard("hello")
             assert rc == 0
             call_args = mock_run.call_args
-            assert call_args[0][0] == ["xclip", "-selection", "clipboard"]
+            assert call_args[0][0] == ["/usr/bin/xclip", "-selection", "clipboard"]
 
     def test_x11_xsel_fallback(self):
         with (
@@ -167,7 +167,7 @@ class TestCopyToClipboard:
             rc = _copy_to_clipboard("hello")
             assert rc == 0
             call_args = mock_run.call_args
-            assert call_args[0][0] == ["xsel", "--clipboard", "--input"]
+            assert call_args[0][0] == ["/usr/bin/xsel", "--clipboard", "--input"]
 
     def test_darwin_pbcopy(self):
         with (
@@ -178,7 +178,7 @@ class TestCopyToClipboard:
             rc = _copy_to_clipboard("hello")
             assert rc == 0
             call_args = mock_run.call_args
-            assert call_args[0][0] == ["pbcopy"]
+            assert call_args[0][0] == ["/usr/bin/pbcopy"]
 
     def test_no_tool_found(self, capsys):
         with (
@@ -236,10 +236,7 @@ class TestReadInput:
         args = _make_args(text=["hello", "world"])
         assert _read_input(args) == "hello world"
 
-    def test_stdin_pipe(self, monkeypatch):
-        import io
-
-        monkeypatch.setattr("sys.stdin", io.StringIO("piped text"))
+    def test_stdin_pipe(self):
         args = _make_args()
         with patch("cbcopy.cli.sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
@@ -312,4 +309,4 @@ class TestMainCLI:
             pytest.raises(SystemExit, match="0"),
         ):
             main()
-            mock_copy.assert_called_once_with("hello")
+        mock_copy.assert_called_once_with("hello")

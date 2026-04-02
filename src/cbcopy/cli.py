@@ -79,18 +79,32 @@ def _run_clip(
     """
     input_data = text.encode(encoding)
     stderr_target = subprocess.DEVNULL if devnull_stderr else subprocess.PIPE
-    proc = subprocess.run(
-        cmd,
-        input=input_data,
-        stdout=subprocess.DEVNULL,
-        stderr=stderr_target,
-    )
+    tool_name = Path(cmd[0]).name
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=input_data,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_target,
+            timeout=30,
+        )
+    except FileNotFoundError:
+        print(f"error: {tool_name} not found", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"error: failed to run {tool_name}: {e}", file=sys.stderr)
+        return 1
+    except subprocess.TimeoutExpired:
+        print(f"error: {tool_name} timed out after 30s", file=sys.stderr)
+        return 1
     if proc.returncode != 0 and proc.stderr:
         detail = proc.stderr.decode(errors="replace").strip()
-        print(f"error: {cmd[0]} failed (exit code {proc.returncode}): {detail}", file=sys.stderr)
-    elif proc.returncode != 0:
-        print(f"error: {cmd[0]} failed (exit code {proc.returncode})", file=sys.stderr)
-    return proc.returncode
+        print(f"error: {tool_name} failed (exit code {proc.returncode}): {detail}", file=sys.stderr)
+        return 1
+    if proc.returncode != 0:
+        print(f"error: {tool_name} failed (exit code {proc.returncode})", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _copy_to_clipboard(text: str) -> int:
@@ -101,31 +115,36 @@ def _copy_to_clipboard(text: str) -> int:
     platform = _detect_platform()
 
     if platform == "windows":
-        if not shutil.which("clip.exe"):
+        path = shutil.which("clip.exe")
+        if not path:
             print("error: clip.exe not found", file=sys.stderr)
             return 1
-        return _run_clip(["clip.exe"], text, encoding="utf-16-le")
+        return _run_clip([path], text, encoding="utf-16-le")
 
     if platform == "wsl":
-        if not shutil.which("clip.exe"):
+        path = shutil.which("clip.exe")
+        if not path:
             print("error: clip.exe not found in WSL PATH", file=sys.stderr)
             return 1
-        return _run_clip(["clip.exe"], text, encoding="utf-16-le")
+        return _run_clip([path], text, encoding="utf-16-le")
 
     if platform == "wayland":
-        if not shutil.which("wl-copy"):
+        path = shutil.which("wl-copy")
+        if not path:
             print(
                 "error: wl-copy not found\n  install wl-clipboard: sudo apt install wl-clipboard",
                 file=sys.stderr,
             )
             return 1
-        return _run_clip(["wl-copy"], text, devnull_stderr=True)
+        return _run_clip([path], text, devnull_stderr=True)
 
     if platform == "x11":
-        if shutil.which("xclip"):
-            return _run_clip(["xclip", "-selection", "clipboard"], text)
-        if shutil.which("xsel"):
-            return _run_clip(["xsel", "--clipboard", "--input"], text)
+        xclip = shutil.which("xclip")
+        if xclip:
+            return _run_clip([xclip, "-selection", "clipboard"], text)
+        xsel = shutil.which("xsel")
+        if xsel:
+            return _run_clip([xsel, "--clipboard", "--input"], text)
         print(
             "error: no X11 clipboard tool found\n  install one: sudo apt install xclip",
             file=sys.stderr,
@@ -133,10 +152,11 @@ def _copy_to_clipboard(text: str) -> int:
         return 1
 
     if platform == "darwin":
-        if not shutil.which("pbcopy"):
+        path = shutil.which("pbcopy")
+        if not path:
             print("error: pbcopy not found", file=sys.stderr)
             return 1
-        return _run_clip(["pbcopy"], text)
+        return _run_clip([path], text)
 
     print(
         "error: no clipboard tool found\n"
@@ -154,9 +174,28 @@ def _copy_to_clipboard(text: str) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _selected_tool() -> str | None:
+    """Return the tool name that _copy_to_clipboard would actually use."""
+    platform = _detect_platform()
+    if platform in ("windows", "wsl"):
+        return "clip.exe" if shutil.which("clip.exe") else None
+    if platform == "wayland":
+        return "wl-copy" if shutil.which("wl-copy") else None
+    if platform == "x11":
+        if shutil.which("xclip"):
+            return "xclip"
+        if shutil.which("xsel"):
+            return "xsel"
+        return None
+    if platform == "darwin":
+        return "pbcopy" if shutil.which("pbcopy") else None
+    return None
+
+
 def _diagnostics() -> None:
     """Print detected platform, env vars, and available tools."""
     platform = _detect_platform()
+    active_tool = _selected_tool()
     print(f"platform: {platform}")
     print("env:")
     for var in ("WAYLAND_DISPLAY", "DISPLAY", "WSL_DISTRO_NAME"):
@@ -165,12 +204,10 @@ def _diagnostics() -> None:
     print(f"  sys.platform: {sys.platform}")
     print("tools:")
 
-    selected = False
     for tool in _TOOL_NAMES:
         path = shutil.which(tool)
-        if path and not selected:
+        if path and tool == active_tool:
             print(f"  {tool}: {path} (selected)")
-            selected = True
         elif path:
             print(f"  {tool}: {path}")
         else:
@@ -189,7 +226,11 @@ def _read_input(args: argparse.Namespace) -> str | None:
         if not p.is_file():
             print(f"error: file not found: {args.file}", file=sys.stderr)
             return None
-        return p.read_text(encoding="utf-8")
+        try:
+            return p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"error: cannot read {args.file}: {e}", file=sys.stderr)
+            return None
 
     if args.text:
         return " ".join(args.text)
