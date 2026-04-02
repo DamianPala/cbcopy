@@ -1,0 +1,52 @@
+[project]
+name = "cbcopy"
+version = "0.1.0"
+description = "Universal clipboard write CLI for AI agents. Cross-platform: Linux Wayland/X11, macOS, Windows, WSL."
+readme = "README.md"
+authors = [
+    { name = "Haz", email = "noreply@damianpala.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+license = "MIT"
+keywords = ["clipboard", "cli", "wayland", "wsl", "cross-platform", "ai-agents"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Utilities",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/DamianPala/cbcopy"
+
+[project.scripts]
+cbcopy = "cbcopy.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.10,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/cbcopy/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
