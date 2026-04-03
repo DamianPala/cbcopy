@@ -1,6 +1,6 @@
 [project]
 name = "cbcopy"
-version = "0.1.0"
+version = "0.1.1"
 description = "Universal clipboard write CLI for AI agents. Cross-platform: Linux Wayland/X11, macOS, Windows, WSL."
 readme = "README.md"
 authors = [
@@ -36,10 +36,12 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "0.1.1"
 commit = true
 tag = true
 tag_name = "v{new_version}"
+commit_args = ""
+message = "chore(release): bump version {current_version} → {new_version}"
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
